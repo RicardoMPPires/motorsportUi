@@ -1,0 +1,42 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Lap {
+  id            Int               @id @default(autoincrement())
+  lapNumber     Int
+  driverName    String?
+  circuitName   String?
+  car           String?
+  session       String?
+  run           String?
+  isBestLap     Boolean           @default(false)
+  createdAt     DateTime          @default(now())
+  lapTime       Float             // Lap time in seconds (to make it easy to store/compare)
+  telemetryPackets TelemetryPacket[]
+}
+
+model TelemetryPacket {
+  id            Int               @id @default(autoincrement())
+  packetId      Int
+  lapId         Int
+  gas           Decimal
+  brake         Decimal
+  fuel          Decimal
+  gear          Int
+  rpms          Int
+  steerAngle    Decimal
+  speedKmh      Decimal
+  lapNumber     Int
+  time          Int
+  lap           Lap               @relation(fields: [lapId], references: [id], onDelete: Cascade)
+}
