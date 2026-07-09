@@ -4,11 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
+    "dev:telemetry": "python ac_telem_node_v3.py",
+    "dev:all": "concurrently -n next,telemetry -c blue,green \"npm:dev\" \"npm:dev:telemetry\"",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
+    "@prisma/adapter-better-sqlite3": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "next": "16.2.6",
     "react": "19.2.4",
@@ -20,6 +23,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^10.0.3",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "prisma": "^7.8.0",

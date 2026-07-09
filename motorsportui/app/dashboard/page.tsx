@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -56,8 +56,8 @@ export default function Dashboard() {
   const [laps, setLaps] = useState<LapData[]>([]);
   const [selectedLapId, setSelectedLapId] = useState<number | null>(null);
   const [bestLapData, setBestLapData] = useState<TelemetryData[]>([]);
-  const [currentLapPackets, setCurrentLapPackets] = useState<TelemetryData[]>([]);
-  const [currentLapNumber, setCurrentLapNumber] = useState(1);
+  const currentLapPacketsRef = useRef<TelemetryData[]>([]);
+  const currentLapNumberRef = useRef(1);
   const router = useRouter();
 
   const MAX_DATA_POINTS = 100;
@@ -125,52 +125,43 @@ export default function Dashboard() {
     }
   }, [driverName, circuitName, car, session, run, loadLaps]);
 
-  // Simulate receiving telemetry data (replace with real WebSocket connection)
+  // Live telemetry from the AC bridge script via /api/telemetry (SSE)
   useEffect(() => {
-    let currentSimLap = 1;
-    let simLapStartTime = Date.now();
-    
-    const interval = setInterval(() => {
-      const simLapTimeSeconds = (Date.now() - simLapStartTime) / 1000;
-      const isLastPacketOfLap = telemetryHistory.length > 0 && Math.random() > 0.995;
-      
-      const newData: TelemetryData = {
-        packetId: Date.now(),
-        gas: Math.random() * 100,
-        brake: Math.random() > 0.7 ? Math.random() * 100 : 0,
-        fuel: 100 - (telemetryHistory.length * 0.1) % 100,
-        gear: Math.floor(Math.random() * 8) + 1,
-        rpms: 1000 + Math.random() * 8000,
-        steerAngle: (Math.random() - 0.5) * 180,
-        speedKmh: Math.random() * 300,
-        lapNumber: currentSimLap,
-        time: Date.now(),
-        lapTime: isLastPacketOfLap ? simLapTimeSeconds : undefined
-      };
+    const source = new EventSource('/api/telemetry');
 
-      // Simulate lap change
-      if (isLastPacketOfLap) {
-        // Save current lap
-        if (currentLapPackets.length > 0) {
-          saveLap(currentLapPackets, currentLapNumber, simLapTimeSeconds);
+    source.onmessage = (event) => {
+      const frame = JSON.parse(event.data);
+      const lapChanged = frame.lapNumber !== currentLapNumberRef.current;
+
+      if (lapChanged) {
+        if (currentLapPacketsRef.current.length > 0) {
+          const lapTimeSeconds = (frame.lastLapTimeMs ?? 0) / 1000;
+          saveLap(currentLapPacketsRef.current, currentLapNumberRef.current, lapTimeSeconds);
         }
-        // Start new lap
-        currentSimLap++;
-        simLapStartTime = Date.now();
-        setCurrentLapNumber(currentSimLap);
-        setCurrentLapPackets([]);
+        currentLapNumberRef.current = frame.lapNumber;
+        currentLapPacketsRef.current = [];
       }
 
-      setCurrentData(newData);
-      setTelemetryHistory(prev => {
-        const updated = [...prev, newData];
-        return updated.slice(-MAX_DATA_POINTS);
-      });
-      setCurrentLapPackets(prev => [...prev, newData]);
-    }, 200);
+      const newData: TelemetryData = {
+        packetId: frame.packetId,
+        gas: frame.gas,
+        brake: frame.brake,
+        fuel: frame.fuel,
+        gear: frame.gear,
+        rpms: frame.rpms,
+        steerAngle: frame.steerAngle,
+        speedKmh: frame.speedKmh,
+        lapNumber: frame.lapNumber,
+        time: frame.time,
+      };
 
-    return () => clearInterval(interval);
-  }, [telemetryHistory.length, currentLapPackets, currentLapNumber, saveLap]);
+      currentLapPacketsRef.current = [...currentLapPacketsRef.current, newData];
+      setCurrentData(newData);
+      setTelemetryHistory(prev => [...prev, newData].slice(-MAX_DATA_POINTS));
+    };
+
+    return () => source.close();
+  }, [saveLap]);
 
   const markAsBestLap = async (lapId: number) => {
     try {
