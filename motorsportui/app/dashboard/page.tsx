@@ -236,7 +236,7 @@ export default function Dashboard() {
                 borderRadius: '8px'
               }}
               labelStyle={{ display: 'none' }}
-              formatter={(value: number) => [`${value.toFixed(1)} ${unit}`, title]}
+              formatter={(value) => [`${Number(value).toFixed(1)} ${unit}`, title]}
             />
             {bestLapData.length > 0 && (
               <Line
@@ -299,7 +299,7 @@ export default function Dashboard() {
                       borderRadius: '8px'
                     }}
                     labelStyle={{ display: 'none' }}
-                    formatter={(value: number) => [`${value.toFixed(1)}${s.unit}`, s.name]}
+                    formatter={(value) => [`${Number(value).toFixed(1)}${s.unit}`, s.name]}
                   />
                   {bestLapData.length > 0 && (
                     <Line
@@ -535,7 +535,7 @@ export default function Dashboard() {
                     borderRadius: '8px'
                   }}
                   labelStyle={{ display: 'none' }}
-                  formatter={(value: number) => [`Gear ${value}`, 'Gear']}
+                  formatter={(value) => [`Gear ${value}`, 'Gear']}
                 />
                 {bestLapData.length > 0 && (
                   <Line
