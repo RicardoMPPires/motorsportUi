@@ -132,34 +132,39 @@ export default function Dashboard() {
   const saveLapRef = useRef(saveLap);
   saveLapRef.current = saveLap;
 
-  // Live telemetry from the AC bridge script via /api/telemetry (SSE)
+  // Live telemetry: poll latest frame (SSE through Next.js never flushes live)
   useEffect(() => {
-    const source = new EventSource('/api/telemetry');
+    let alive = true;
+    let lastPacketId: number | null = null;
 
-    source.onmessage = (event) => {
-      const frame = JSON.parse(event.data);
-      const lapChanged = frame.lapNumber !== currentLapNumberRef.current;
+    const applyFrame = (frame: Record<string, unknown>) => {
+      const packetId = frame.packetId as number;
+      if (packetId === lastPacketId) return;
+      lastPacketId = packetId;
+
+      const lapNumber = frame.lapNumber as number;
+      const lapChanged = lapNumber !== currentLapNumberRef.current;
 
       if (lapChanged) {
         if (currentLapPacketsRef.current.length > 0) {
-          const lapTimeSeconds = (frame.lastLapTimeMs ?? 0) / 1000;
+          const lapTimeSeconds = ((frame.lastLapTimeMs as number) ?? 0) / 1000;
           saveLapRef.current(currentLapPacketsRef.current, currentLapNumberRef.current, lapTimeSeconds);
         }
-        currentLapNumberRef.current = frame.lapNumber;
+        currentLapNumberRef.current = lapNumber;
         currentLapPacketsRef.current = [];
       }
 
       const newData: TelemetryData = {
-        packetId: frame.packetId,
-        gas: frame.gas,
-        brake: frame.brake,
-        fuel: frame.fuel,
-        gear: frame.gear,
-        rpms: frame.rpms,
-        steerAngle: frame.steerAngle,
-        speedKmh: frame.speedKmh,
-        lapNumber: frame.lapNumber,
-        time: frame.time,
+        packetId,
+        gas: frame.gas as number,
+        brake: frame.brake as number,
+        fuel: frame.fuel as number,
+        gear: frame.gear as number,
+        rpms: frame.rpms as number,
+        steerAngle: frame.steerAngle as number,
+        speedKmh: frame.speedKmh as number,
+        lapNumber,
+        time: frame.time as number,
       };
 
       currentLapPacketsRef.current = [...currentLapPacketsRef.current, newData];
@@ -167,7 +172,22 @@ export default function Dashboard() {
       setTelemetryHistory(prev => [...prev, newData].slice(-MAX_DATA_POINTS));
     };
 
-    return () => source.close();
+    const tick = async () => {
+      try {
+        const res = await fetch('/api/telemetry', { cache: 'no-store' });
+        if (!alive || res.status === 204 || !res.ok) return;
+        applyFrame(await res.json());
+      } catch {
+        // ponytail: drop a poll frame; next interval retries
+      }
+    };
+
+    const id = setInterval(tick, 50);
+    tick();
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
   }, []);
 
   const markAsBestLap = async (lapId: number) => {

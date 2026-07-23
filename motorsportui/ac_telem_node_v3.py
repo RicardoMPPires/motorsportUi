@@ -9,25 +9,32 @@ import urllib.error
 
 TELEMETRY_URL = os.environ.get("TELEMETRY_URL", "http://localhost:3000/api/telemetry")
 
+_post_ok = None
+
 
 def post_telemetry(payload):
+    global _post_ok
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
-        TELEMETRY_URL, data=data, headers={"Content-Type": "application/json"}
+        TELEMETRY_URL, data=data, headers={"Content-Type": "application/json"}, method="POST"
     )
     try:
         urllib.request.urlopen(req, timeout=0.5).close()
-    except (urllib.error.URLError, OSError):
-        # ponytail: frontend not up yet / dropped a frame — next tick retries, no queueing
-        pass
+        if _post_ok is not True:
+            print(f"Posting OK → {TELEMETRY_URL}")
+            _post_ok = True
+        return True
+    except (urllib.error.URLError, OSError) as e:
+        if _post_ok is not False:
+            print(f"POST failed ({e}). Is the Next app on :3000?")
+            _post_ok = False
+        return False
 
 # Define C-types matching the C++ structs inside Assetto Corsa's engine
 c_int32 = ctypes.c_int32
 c_float = ctypes.c_float
 c_wchar = ctypes.c_wchar
 
-# Structs define the exact memory layout of AC's shared memory.
-# Note: These are truncated to the most essential fields to ensure cross-version compatibility.
 class SPageFilePhysics(ctypes.Structure):
     _pack_ = 4
     _fields_ =[
@@ -110,9 +117,7 @@ class SPageFileStatic(ctypes.Structure):
         ('tyreRadius', c_float * 4),
     ]
 
-
 def main():
-    # Enable ANSI escape codes in Windows terminals (allows cursor movement to avoid flickering)
     if os.name == 'nt':
         os.system("")
 
@@ -121,21 +126,24 @@ def main():
     shm_physics = None
     shm_graphics = None
     shm_static = None
+    connected = False
 
     while True:
         try:
-            # -1 is the correct file descriptor for anonymous mapped memory in Windows
-            # "acpmf_physics" is the shared memory tag Assetto Corsa broadcasts to
+            # FIX 1: Explicitly request Read-Only access so Windows allows it
             if not shm_physics:
-                shm_physics = mmap.mmap(-1, ctypes.sizeof(SPageFilePhysics), "acpmf_physics")
-                shm_graphics = mmap.mmap(-1, ctypes.sizeof(SPageFileGraphic), "acpmf_graphics")
-                shm_static = mmap.mmap(-1, ctypes.sizeof(SPageFileStatic), "acpmf_static")
+                shm_physics = mmap.mmap(-1, ctypes.sizeof(SPageFilePhysics), "acpmf_physics", access=mmap.ACCESS_READ)
+                shm_graphics = mmap.mmap(-1, ctypes.sizeof(SPageFileGraphic), "acpmf_graphics", access=mmap.ACCESS_READ)
+                shm_static = mmap.mmap(-1, ctypes.sizeof(SPageFileStatic), "acpmf_static", access=mmap.ACCESS_READ)
+                
+                if not connected:
+                    print("🟢 Successfully connected to Assetto Corsa telemetry!")
+                    connected = True
 
-            # Map the byte buffers into readable ctypes structures
-            physics = SPageFilePhysics.from_buffer(shm_physics)
-            graphics = SPageFileGraphic.from_buffer(shm_graphics)
-            static = SPageFileStatic.from_buffer(shm_static)
-
+            # FIX 2: Use from_buffer_copy() to safely read from the Read-Only memory mapped buffers
+            physics = SPageFilePhysics.from_buffer_copy(shm_physics)
+            graphics = SPageFileGraphic.from_buffer_copy(shm_graphics)
+            static = SPageFileStatic.from_buffer_copy(shm_static)
             
             telemetry = {
                 "status": "connected",
@@ -155,8 +163,12 @@ def main():
             post_telemetry(telemetry)
             time.sleep(1 / 60)
             
-        except (FileNotFoundError, OSError):
-            # Exception trips if AC is closed or you aren't loaded onto a track yet
+        except (FileNotFoundError, OSError) as e:
+            # Game is closed or we are in the menus
+            if connected:
+                print(f"🔴 Lost connection to Assetto Corsa. Waiting...")
+                connected = False
+                
             shm_physics = None
             shm_graphics = None
             shm_static = None
