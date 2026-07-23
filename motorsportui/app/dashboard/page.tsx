@@ -13,7 +13,6 @@ import {
   ResponsiveContainer,
   AreaChart,
   Area,
-  Legend
 } from 'recharts';
 
 interface TelemetryData {
@@ -42,6 +41,157 @@ interface LapData {
   createdAt: string;
   lapTime: number;
   telemetryPackets: TelemetryData[];
+}
+
+// Stable chart components (must live outside Dashboard — defining them inside
+// remounts Recharts on every packet and freezes ResponsiveContainer at -1×-1)
+function GraphCard({
+  title,
+  dataKey,
+  color,
+  unit = '',
+  yDomain,
+  data,
+  bestLapData,
+  darkMode,
+}: {
+  title: string;
+  dataKey: keyof TelemetryData;
+  color: string;
+  unit?: string;
+  yDomain?: [number, number];
+  data: TelemetryData[];
+  bestLapData: TelemetryData[];
+  darkMode: boolean;
+}) {
+  return (
+    <div className={`${darkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'} rounded-xl p-4 border`}>
+      <h3 className={`${darkMode ? 'text-zinc-400' : 'text-zinc-600'} text-sm font-medium mb-3`}>{title}</h3>
+      <div className="h-48 min-w-0">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+          <AreaChart data={data}>
+            <defs>
+              <linearGradient id={`gradient-${dataKey}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor={color} stopOpacity={0.3} />
+                <stop offset="95%" stopColor={color} stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? '#27272a' : '#e4e4e7'} vertical={false} />
+            <XAxis dataKey="time" hide />
+            <YAxis
+              domain={yDomain || ['auto', 'auto']}
+              stroke={darkMode ? '#52525b' : '#a1a1aa'}
+              tick={{ fontSize: 12, fill: darkMode ? '#71717a' : '#71717a' }}
+              tickLine={false}
+              axisLine={false}
+            />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: darkMode ? '#18181b' : '#ffffff',
+                border: darkMode ? '1px solid #3f3f46' : '1px solid #e4e4e7',
+                borderRadius: '8px',
+              }}
+              labelStyle={{ display: 'none' }}
+              formatter={(value) => [`${Number(value).toFixed(1)} ${unit}`, title]}
+            />
+            {bestLapData.length > 0 && (
+              <Line
+                type="monotone"
+                data={bestLapData}
+                dataKey={dataKey}
+                stroke="#9ca3af"
+                strokeWidth={1}
+                dot={false}
+                isAnimationActive={false}
+              />
+            )}
+            <Area
+              type="monotone"
+              dataKey={dataKey}
+              stroke={color}
+              strokeWidth={2}
+              fill={`url(#gradient-${dataKey})`}
+              isAnimationActive={false}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+function CompositeTelemetryGraph({
+  data,
+  bestLapData,
+  darkMode,
+}: {
+  data: TelemetryData[];
+  bestLapData: TelemetryData[];
+  darkMode: boolean;
+}) {
+  const series = [
+    { key: 'gear', name: 'Gear', color: '#eab308', domain: [0, 8] as [number, number], unit: '' },
+    { key: 'rpms', name: 'RPM', color: '#ef4444', domain: [0, 10000] as [number, number], unit: ' rpm' },
+    { key: 'speedKmh', name: 'Speed', color: '#3b82f6', domain: [0, 350] as [number, number], unit: ' km/h' },
+    { key: 'steerAngle', name: 'Wheel Position', color: '#a855f7', domain: [-90, 90] as [number, number], unit: '°' },
+    { key: 'brake', name: 'Brake', color: '#dc2626', domain: [0, 100] as [number, number], unit: '%' },
+    { key: 'gas', name: 'Throttle', color: '#22c55e', domain: [0, 100] as [number, number], unit: '%' },
+  ];
+
+  return (
+    <div className={`${darkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'} rounded-xl p-4 border mt-6`}>
+      <h3 className={`${darkMode ? 'text-zinc-400' : 'text-zinc-600'} text-sm font-medium mb-3`}>Composite Telemetry</h3>
+      <div className="space-y-2">
+        {series.map((s) => (
+          <div key={s.key} className="h-16 min-w-0">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+              <LineChart data={data}>
+                <CartesianGrid strokeDasharray="2 2" stroke={darkMode ? '#27272a' : '#e4e4e7'} vertical={false} />
+                <XAxis dataKey="time" hide />
+                <YAxis
+                  domain={s.domain}
+                  stroke={s.color}
+                  tick={{ fontSize: 8, fill: s.color }}
+                  tickLine={false}
+                  axisLine={{ stroke: s.color, strokeWidth: 1 }}
+                  width={40}
+                  tickCount={3}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: darkMode ? '#18181b' : '#ffffff',
+                    border: darkMode ? '1px solid #3f3f46' : '1px solid #e4e4e7',
+                    borderRadius: '8px',
+                  }}
+                  labelStyle={{ display: 'none' }}
+                  formatter={(value) => [`${Number(value).toFixed(1)}${s.unit}`, s.name]}
+                />
+                {bestLapData.length > 0 && (
+                  <Line
+                    type="monotone"
+                    data={bestLapData}
+                    dataKey={s.key}
+                    stroke="#9ca3af"
+                    strokeWidth={1}
+                    dot={false}
+                    isAnimationActive={false}
+                  />
+                )}
+                <Line
+                  type="monotone"
+                  dataKey={s.key}
+                  stroke={s.color}
+                  strokeWidth={2}
+                  dot={false}
+                  isAnimationActive={false}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function Dashboard() {
@@ -207,163 +357,13 @@ export default function Dashboard() {
   };
 
   const selectLap = (lapId: number) => {
-    const lap = laps.find(l => l.id === lapId);
-    if (lap) {
-      setSelectedLapId(lapId);
-      setTelemetryHistory(lap.telemetryPackets);
-    }
+    setSelectedLapId(lapId);
   };
 
-  const getDisplayData = () => {
-    return selectedLapId 
-      ? laps.find(l => l.id === selectedLapId)?.telemetryPackets || []
-      : telemetryHistory;
-  };
-
-  const GraphCard = ({ 
-    title, 
-    dataKey, 
-    color, 
-    unit = '', 
-    yDomain 
-  }: { 
-    title: string; 
-    dataKey: keyof TelemetryData; 
-    color: string; 
-    unit?: string; 
-    yDomain?: [number, number]; 
-  }) => (
-    <div className={`${darkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'} rounded-xl p-4 border`}>
-      <h3 className={`${darkMode ? 'text-zinc-400' : 'text-zinc-600'} text-sm font-medium mb-3`}>{title}</h3>
-      <div className="h-48">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={getDisplayData()}>
-            <defs>
-              <linearGradient id={`gradient-${dataKey}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={color} stopOpacity={0.3} />
-                <stop offset="95%" stopColor={color} stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? '#27272a' : '#e4e4e7'} vertical={false} />
-            <XAxis 
-              dataKey="time" 
-              hide 
-            />
-            <YAxis 
-              domain={yDomain || ['auto', 'auto']}
-              stroke={darkMode ? '#52525b' : '#a1a1aa'}
-              tick={{ fontSize: 12, fill: darkMode ? '#71717a' : '#71717a' }}
-              tickLine={false}
-              axisLine={false}
-            />
-            <Tooltip 
-              contentStyle={{ 
-                backgroundColor: darkMode ? '#18181b' : '#ffffff', 
-                border: darkMode ? '1px solid #3f3f46' : '1px solid #e4e4e7',
-                borderRadius: '8px'
-              }}
-              labelStyle={{ display: 'none' }}
-              formatter={(value) => [`${Number(value).toFixed(1)} ${unit}`, title]}
-            />
-            {bestLapData.length > 0 && (
-              <Line
-                type="monotone"
-                data={bestLapData}
-                dataKey={dataKey}
-                stroke="#9ca3af"
-                strokeWidth={1}
-                dot={false}
-                isAnimationActive={false}
-              />
-            )}
-            <Area 
-              type="monotone" 
-              dataKey={dataKey} 
-              stroke={color} 
-              strokeWidth={2}
-              fill={`url(#gradient-${dataKey})`} 
-              isAnimationActive={false}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  );
-
-  const CompositeTelemetryGraph = () => {
-    const series = [
-      { key: 'gear', name: 'Gear', color: '#eab308', domain: [0, 8] as [number, number], unit: '' },
-      { key: 'rpms', name: 'RPM', color: '#ef4444', domain: [0, 10000] as [number, number], unit: ' rpm' },
-      { key: 'speedKmh', name: 'Speed', color: '#3b82f6', domain: [0, 350] as [number, number], unit: ' km/h' },
-      { key: 'steerAngle', name: 'Wheel Position', color: '#a855f7', domain: [-90, 90] as [number, number], unit: '°' },
-      { key: 'brake', name: 'Brake', color: '#dc2626', domain: [0, 100] as [number, number], unit: '%' },
-      { key: 'gas', name: 'Throttle', color: '#22c55e', domain: [0, 100] as [number, number], unit: '%' },
-    ];
-
-    return (
-      <div className={`${darkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'} rounded-xl p-4 border mt-6`}>
-        <h3 className={`${darkMode ? 'text-zinc-400' : 'text-zinc-600'} text-sm font-medium mb-3`}>Composite Telemetry</h3>
-        <div className="space-y-2">
-          {series.map(s => (
-            <div key={s.key} className="h-16">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={getDisplayData()}>
-                  <CartesianGrid strokeDasharray="2 2" stroke={darkMode ? '#27272a' : '#e4e4e7'} vertical={false} />
-                  <XAxis dataKey="time" hide />
-                  <YAxis
-                    domain={s.domain}
-                    stroke={s.color}
-                    tick={{ fontSize: 8, fill: s.color }}
-                    tickLine={false}
-                    axisLine={{ stroke: s.color, strokeWidth: 1 }}
-                    width={40}
-                    tickCount={3}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: darkMode ? '#18181b' : '#ffffff',
-                      border: darkMode ? '1px solid #3f3f46' : '1px solid #e4e4e7',
-                      borderRadius: '8px'
-                    }}
-                    labelStyle={{ display: 'none' }}
-                    formatter={(value) => [`${Number(value).toFixed(1)}${s.unit}`, s.name]}
-                  />
-                  {bestLapData.length > 0 && (
-                    <Line
-                      type="monotone"
-                      data={bestLapData}
-                      dataKey={s.key}
-                      stroke="#9ca3af"
-                      strokeWidth={1}
-                      dot={false}
-                      isAnimationActive={false}
-                    />
-                  )}
-                  <Line
-                    type="monotone"
-                    dataKey={s.key}
-                    stroke={s.color}
-                    strokeWidth={2}
-                    dot={false}
-                    isAnimationActive={false}
-                  />
-                  <text
-                    x={50}
-                    y={15}
-                    fontSize={12}
-                    fontWeight="bold"
-                    fill={s.color}
-                  >
-                    {s.name}
-                  </text>
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
+  // Don't clobber live history when viewing a saved lap
+  const displayData = selectedLapId
+    ? laps.find((l) => l.id === selectedLapId)?.telemetryPackets || []
+    : telemetryHistory;
 
   return (
     <div className={`min-h-screen ${darkMode ? 'bg-black text-zinc-100' : 'bg-zinc-50 text-zinc-900'} p-4 md:p-8`}>
@@ -528,24 +528,24 @@ export default function Dashboard() {
 
 
         {/* Composite Telemetry Graph */}
-        <CompositeTelemetryGraph />
+        <CompositeTelemetryGraph data={displayData} bestLapData={bestLapData} darkMode={darkMode} />
 
         {/* Graphs */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-          <GraphCard title="Speed (km/h)" dataKey="speedKmh" color="#3b82f6" unit="km/h" yDomain={[0, 350]} />
-          <GraphCard title="RPM" dataKey="rpms" color="#ef4444" unit="rpm" yDomain={[0, 10000]} />
-          <GraphCard title="Throttle (%)" dataKey="gas" color="#22c55e" unit="%" yDomain={[0, 100]} />
-          <GraphCard title="Brake (%)" dataKey="brake" color="#dc2626" unit="%" yDomain={[0, 100]} />
-          <GraphCard title="Steering Angle (°)" dataKey="steerAngle" color="#a855f7" unit="°" yDomain={[-90, 90]} />
-          <GraphCard title="Fuel (L)" dataKey="fuel" color="#38bdf8" unit="L" />
+          <GraphCard title="Speed (km/h)" dataKey="speedKmh" color="#3b82f6" unit="km/h" yDomain={[0, 350]} data={displayData} bestLapData={bestLapData} darkMode={darkMode} />
+          <GraphCard title="RPM" dataKey="rpms" color="#ef4444" unit="rpm" yDomain={[0, 10000]} data={displayData} bestLapData={bestLapData} darkMode={darkMode} />
+          <GraphCard title="Throttle (%)" dataKey="gas" color="#22c55e" unit="%" yDomain={[0, 100]} data={displayData} bestLapData={bestLapData} darkMode={darkMode} />
+          <GraphCard title="Brake (%)" dataKey="brake" color="#dc2626" unit="%" yDomain={[0, 100]} data={displayData} bestLapData={bestLapData} darkMode={darkMode} />
+          <GraphCard title="Steering Angle (°)" dataKey="steerAngle" color="#a855f7" unit="°" yDomain={[-90, 90]} data={displayData} bestLapData={bestLapData} darkMode={darkMode} />
+          <GraphCard title="Fuel (L)" dataKey="fuel" color="#38bdf8" unit="L" data={displayData} bestLapData={bestLapData} darkMode={darkMode} />
         </div>
 
         {/* Gear Chart */}
         <div className={`mt-6 ${darkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'} rounded-xl p-4 border`}>
           <h3 className={`${darkMode ? 'text-zinc-400' : 'text-zinc-600'} text-sm font-medium mb-3`}>Gear</h3>
-          <div className="h-48">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={getDisplayData()}>
+          <div className="h-48 min-w-0">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+              <LineChart data={displayData}>
                 <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? '#27272a' : '#e4e4e7'} vertical={false} />
                 <XAxis dataKey="time" hide />
                 <YAxis 
