@@ -42,6 +42,9 @@ next-env.d.ts
 
 /app/lib/generated/prisma
 
+# live AC bridge scratch file
+.telemetry-latest.json
+
 # python
 __pycache__/
 *.pyc
