@@ -83,6 +83,10 @@ export default function Dashboard() {
       // Load saved laps
       const res = await fetch('/api/laps');
       const data = await res.json();
+      if (!Array.isArray(data)) {
+        console.error('Error loading laps:', data);
+        return;
+      }
       setLaps(data);
       const best = data.find((lap: LapData) => lap.isBestLap);
       if (best) {
@@ -125,6 +129,9 @@ export default function Dashboard() {
     }
   }, [driverName, circuitName, car, session, run, loadLaps]);
 
+  const saveLapRef = useRef(saveLap);
+  saveLapRef.current = saveLap;
+
   // Live telemetry from the AC bridge script via /api/telemetry (SSE)
   useEffect(() => {
     const source = new EventSource('/api/telemetry');
@@ -136,7 +143,7 @@ export default function Dashboard() {
       if (lapChanged) {
         if (currentLapPacketsRef.current.length > 0) {
           const lapTimeSeconds = (frame.lastLapTimeMs ?? 0) / 1000;
-          saveLap(currentLapPacketsRef.current, currentLapNumberRef.current, lapTimeSeconds);
+          saveLapRef.current(currentLapPacketsRef.current, currentLapNumberRef.current, lapTimeSeconds);
         }
         currentLapNumberRef.current = frame.lapNumber;
         currentLapPacketsRef.current = [];
@@ -161,7 +168,7 @@ export default function Dashboard() {
     };
 
     return () => source.close();
-  }, [saveLap]);
+  }, []);
 
   const markAsBestLap = async (lapId: number) => {
     try {

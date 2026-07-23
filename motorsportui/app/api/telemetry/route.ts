@@ -1,38 +1,51 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// ponytail: in-memory single-process pub/sub — fine for `next dev`,
-// won't survive multi-instance/serverless deploys.
-let latest: unknown = null
-const clients = new Set<ReadableStreamDefaultController>()
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
+// ponytail: globalThis so HMR / route re-evals don't drop live subscribers
+// (module-level Set was why refresh showed one frame and live stayed dead)
+type Hub = {
+  latest: unknown
+  clients: Set<ReadableStreamDefaultController>
+}
+
+const hub: Hub = ((globalThis as typeof globalThis & { __telemetryHub?: Hub })
+  .__telemetryHub ??= { latest: null, clients: new Set() })
 
 function send(controller: ReadableStreamDefaultController, data: unknown) {
-  controller.enqueue(`data: ${JSON.stringify(data)}\n\n`)
+  try {
+    controller.enqueue(`data: ${JSON.stringify(data)}\n\n`)
+  } catch {
+    hub.clients.delete(controller)
+  }
 }
 
 export async function POST(request: NextRequest) {
-  latest = await request.json()
-  for (const controller of clients) send(controller, latest)
+  hub.latest = await request.json()
+  for (const controller of hub.clients) send(controller, hub.latest)
   return new NextResponse(null, { status: 204 })
 }
 
 export async function GET() {
-  let self: ReadableStreamDefaultController
+  let self!: ReadableStreamDefaultController
   const stream = new ReadableStream({
     start(controller) {
       self = controller
-      clients.add(controller)
-      if (latest) send(controller, latest)
+      hub.clients.add(controller)
+      if (hub.latest) send(controller, hub.latest)
     },
     cancel() {
-      clients.delete(self)
+      hub.clients.delete(self)
     },
   })
 
   return new NextResponse(stream, {
     headers: {
       'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
+      'Cache-Control': 'no-cache, no-transform',
       Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
     },
   })
 }
