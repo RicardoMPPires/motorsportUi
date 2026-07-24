@@ -1,5 +1,11 @@
 allowBuilds:
   '@prisma/engines': true
+  better-sqlite3: true
   prisma: true
   sharp: true
   unrs-resolver: true
+
+# Prisma's client is generated to app/lib/generated (outside node_modules); pnpm's
+# default isolated layout hides transitive @prisma/* runtime deps from it. Flat
+# layout (as the committed package-lock.json assumes) makes them resolvable.
+nodeLinker: hoisted

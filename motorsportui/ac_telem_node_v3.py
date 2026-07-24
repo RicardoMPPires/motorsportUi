@@ -121,6 +121,11 @@ def main():
     if os.name == 'nt':
         os.system("")
 
+    # ponytail: piped stdout (concurrently, IDE task runners) falls back to the
+    # system codepage on Windows, which can't encode the emoji below and crashes
+    # the process right after connecting, before a single frame gets posted.
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
+
     print("Waiting for Assetto Corsa to start (make sure you are in a session on track)...")
 
     shm_physics = None

@@ -68,7 +68,7 @@ function GraphCard({
     <div className={`${darkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'} rounded-xl p-4 border`}>
       <h3 className={`${darkMode ? 'text-zinc-400' : 'text-zinc-600'} text-sm font-medium mb-3`}>{title}</h3>
       <div className="h-48 min-w-0">
-        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} initialDimension={{ width: 300, height: 192 }}>
           <AreaChart data={data}>
             <defs>
               <linearGradient id={`gradient-${dataKey}`} x1="0" y1="0" x2="0" y2="1">
@@ -144,7 +144,7 @@ function CompositeTelemetryGraph({
       <div className="space-y-2">
         {series.map((s) => (
           <div key={s.key} className="h-16 min-w-0">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} initialDimension={{ width: 300, height: 64 }}>
               <LineChart data={data}>
                 <CartesianGrid strokeDasharray="2 2" stroke={darkMode ? '#27272a' : '#e4e4e7'} vertical={false} />
                 <XAxis dataKey="time" hide />
@@ -544,7 +544,7 @@ export default function Dashboard() {
         <div className={`mt-6 ${darkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'} rounded-xl p-4 border`}>
           <h3 className={`${darkMode ? 'text-zinc-400' : 'text-zinc-600'} text-sm font-medium mb-3`}>Gear</h3>
           <div className="h-48 min-w-0">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} initialDimension={{ width: 300, height: 192 }}>
               <LineChart data={displayData}>
                 <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? '#27272a' : '#e4e4e7'} vertical={false} />
                 <XAxis dataKey="time" hide />
